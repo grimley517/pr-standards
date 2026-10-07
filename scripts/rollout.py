@@ -38,7 +38,7 @@ def repos(owners):
     for o in owners:
         url = "user/repos?affiliation=owner&per_page=100" if o == me else f"orgs/{o}/repos?per_page=100"
         for r in json.loads(subprocess.run(["gh", "api", "--paginate", url, "--jq", "[.[]]"], capture_output=True, text=True, check=True).stdout.replace("]\n[", ",")):
-            if r["owner"]["login"].lower() == o.lower() and not r["archived"] and not r["fork"]:
+            if r["owner"]["login"].lower() == o.lower() and not r["archived"] and not r["fork"] and r["name"] != "pr-standards":
                 yield r
 
 
