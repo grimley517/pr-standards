@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Apply pr-standards to every owned, non-fork, non-archived repo. Idempotent; uses the gh CLI.
 
-  rollout.py [--dry-run] [--owners grimley517,grimpop] [repo ...]
+  rollout.py [--dry-run] [--enforce] [--owners grimley517,grimpop] [repo ...]
 
 Per repo: one commit adding only the caller workflow (repo type detected once and pinned as its
-`type:` input; edit it to override) and .github/copilot-instructions.md, then upserts the "pr-standards" ruleset:
-PR required, "pr-standards / gate" check required, automatic Copilot review.
+`type:` input; edit it to override) and .github/copilot-instructions.md, then upserts the "pr-standards" ruleset: automatic Copilot review, plus (with --enforce)
+PR required and "pr-standards / gate" as a required check. Without --enforce nothing blocks merging.
 """
 import base64, json, subprocess, sys, time
 from pathlib import Path
@@ -81,16 +81,17 @@ def commit(r, head_sha, files):
     gh(f"repos/{repo}/git/refs/heads/{r['default_branch']}", "-X", "PATCH", body={"sha": c["sha"]})
 
 
-def ruleset(r):
+def ruleset(r, enforce):
     repo = r["full_name"]
     body = {"name": "pr-standards", "target": "branch", "enforcement": "active",
             "conditions": {"ref_name": {"include": ["~DEFAULT_BRANCH"], "exclude": []}},
-            "rules": [
+            "rules": ([
                 {"type": "pull_request", "parameters": {"required_approving_review_count": 0, "dismiss_stale_reviews_on_push": False,
                                                         "require_code_owner_review": False, "require_last_push_approval": False,
                                                         "required_review_thread_resolution": False}},
                 {"type": "required_status_checks", "parameters": {"strict_required_status_checks_policy": False,
                                                                   "required_status_checks": [{"context": CHECK}]}},
+            ] if enforce else []) + [
                 {"type": "copilot_code_review", "parameters": {"review_on_push": True, "review_draft_pull_requests": False}},
             ]}
     existing = next((x for x in gh(f"repos/{repo}/rulesets") or [] if x["name"] == "pr-standards"), None)
@@ -102,6 +103,7 @@ def ruleset(r):
 
 def main(argv):
     dry = "--dry-run" in argv
+    enforce = "--enforce" in argv  # also set `enforce: true` default in gate.yml
     owners = ["grimley517", "grimpop"]
     if "--owners" in argv:
         owners = argv[argv.index("--owners") + 1].split(",")
@@ -123,7 +125,7 @@ def main(argv):
                 continue
             if files:
                 commit(r, head, files)
-            ruleset(r)
+            ruleset(r, enforce)
         except Exception as e:  # keep going; report at end
             rc = 1
             print(f"FAIL  {name}: {e}")

@@ -31,13 +31,16 @@ OBS_FILES = re.compile(r"(^|/)(alerts?|alerting|monitoring|observability|dashboa
 LOG_RE = re.compile(r"\b(logging\.getLogger|structlog|loguru|ILogger|Serilog|NLog|log/slog|zap\.|zerolog|logrus|winston|pino|bunyan|console\.error|Write-Log|opentelemetry|OpenTelemetry|applicationinsights|sentry)", re.I)
 
 failures = []
+# ENFORCE=true -> errors that fail the check; otherwise warnings only (check stays green).
+ENFORCE = os.environ.get("ENFORCE", "false").lower() == "true"
+LEVEL = "error" if ENFORCE else "warning"
 
 
 def fail(msg, file=None, line=None):
     """Annotate (shows on the PR's Files tab) and collect for the job summary."""
     failures.append((msg, file, line))
     loc = f" file={file}" + (f",line={line}" if line else "") if file else ""
-    print(f"::error{loc}::{msg}")
+    print(f"::{LEVEL}{loc}::{msg}")
 
 
 def summarise(check):
@@ -45,7 +48,8 @@ def summarise(check):
     if not out:
         return
     with open(out, "a") as fh:
-        fh.write(f"### {check}: {'❌ ' + str(len(failures)) + ' issue(s)' if failures else '✅ passed'}\n\n")
+        mark = "❌" if ENFORCE else "⚠️"
+        fh.write(f"### {check}: {mark + ' ' + str(len(failures)) + ' issue(s)' if failures else '✅ passed'}\n\n")
         for msg, file, line in failures[:200]:
             fh.write(f"- {'`' + file + (':' + str(line) if line else '') + '` ' if file else ''}{msg}\n")
         if HELP.get(check) and failures:
@@ -276,16 +280,24 @@ if __name__ == "__main__":
             f"| {k} | {'✅' if v['result'] == 'success' else '⏭️ n/a' if v['result'] == 'skipped' else '❌ ' + v['result']} |" for k, v in res.items()]
         if bad:
             lines += ["", f"Blocked by: **{', '.join(bad)}**. Open the failing job above for the itemised reasons."]
+        elif not ENFORCE:
+            lines += ["", "Advisory mode: issues appear as ⚠️ warnings on the PR and in each job's summary; nothing blocks merging."]
         if os.environ.get("GITHUB_STEP_SUMMARY"):
             Path(os.environ["GITHUB_STEP_SUMMARY"]).write_text("\n".join(lines) + "\n")
         print("\n".join(lines))
         for k in bad:
             print(f"::error::pr-standards blocked by '{k}' — see that job's summary for details.")
         sys.exit(1 if bad else 0)
+    if check == "semgrep":  # turn semgrep JSON into PR annotations
+        for r in json.load(open("semgrep.json")).get("results", []):
+            fail(f"{r['check_id'].split('.')[-1]}: {r['extra']['message'].strip().splitlines()[0]}", r["path"], r["start"]["line"])
+        summarise("owasp")
+        print(f"owasp: {len(failures)} finding(s)")
+        sys.exit(1 if failures and ENFORCE else 0)
     if check == "type":
         print(repo_type(cfg()))
         sys.exit(0)
     globals()[f"check_{check}"](base)
     summarise(check)
-    print(f"{check}: {'FAILED' if failures else 'passed'} ({len(failures)} issue(s))")
-    sys.exit(1 if failures else 0)
+    print(f"{check}: {('FAILED' if ENFORCE else 'WARNINGS') if failures else 'passed'} ({len(failures)} issue(s))")
+    sys.exit(1 if failures and ENFORCE else 0)

@@ -7,6 +7,13 @@ on:
         description: "code | deployable | pages (blank = auto-detect)"
         type: string
         default: ""
+      enforce:
+        description: "true = issues fail the check; false = warnings only"
+        type: boolean
+        default: false
+
+env:
+  ENFORCE: ${{ inputs.enforce }}
 
 permissions:
   contents: read
@@ -71,9 +78,14 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - uses: actions/checkout@v4
+        with:
+          repository: grimley517/pr-standards
+          path: .pr-standards
       - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
-      # Only findings introduced by this PR fail the gate.
-      - run: semgrep scan --config p/owasp-top-ten --config p/secrets --error --metrics=off --baseline-commit "${{ github.event.pull_request.base.sha }}"
+      # Only findings introduced by this PR are reported.
+      - run: semgrep scan --config p/owasp-top-ten --config p/secrets --metrics=off --json -o semgrep.json --exclude .pr-standards --baseline-commit "${{ github.event.pull_request.base.sha }}"
+      - run: python3 .pr-standards/scripts/gate.py semgrep
 
   observability:
     needs: classify
