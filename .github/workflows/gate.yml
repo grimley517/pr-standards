@@ -1,0 +1,100 @@
+# Reusable PR gate. Callers: see templates/pr-standards.yml. Required check name: "pr-standards / gate".
+name: pr-standards
+on:
+  workflow_call:
+    inputs:
+      type:
+        description: "code | deployable | pages (blank = auto-detect)"
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  classify:
+    runs-on: ubuntu-latest
+    outputs:
+      type: ${{ steps.t.outputs.type }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with: { repository: grimley517/pr-standards, path: .pr-standards }
+      - id: t
+        env: { TYPE: "${{ inputs.type }}" }
+        run: echo "type=${TYPE:-$(python3 .pr-standards/scripts/gate.py type)}" >> "$GITHUB_OUTPUT"
+
+  onboarding:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with: { repository: grimley517/pr-standards, path: .pr-standards }
+      - run: python3 .pr-standards/scripts/gate.py onboarding
+
+  hexagonal:
+    needs: classify
+    if: needs.classify.outputs.type != 'pages'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/checkout@v4
+        with: { repository: grimley517/pr-standards, path: .pr-standards }
+      - run: python3 .pr-standards/scripts/gate.py hexagonal "${{ github.event.pull_request.base.sha }}"
+
+  coverage:
+    needs: classify
+    if: needs.classify.outputs.type != 'pages'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with: { repository: grimley517/pr-standards, path: .pr-standards }
+      - run: python3 .pr-standards/scripts/gate.py coverage
+
+  owasp:
+    needs: classify
+    if: needs.classify.outputs.type != 'pages'
+    runs-on: ubuntu-latest
+    container: semgrep/semgrep
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      # Only findings introduced by this PR fail the gate.
+      - run: semgrep scan --config p/owasp-top-ten --config p/secrets --error --metrics=off --baseline-commit "${{ github.event.pull_request.base.sha }}"
+
+  observability:
+    needs: classify
+    if: needs.classify.outputs.type == 'deployable'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with: { repository: grimley517/pr-standards, path: .pr-standards }
+      - run: python3 .pr-standards/scripts/gate.py observability
+
+  content:
+    needs: classify
+    if: needs.classify.outputs.type == 'pages'
+    runs-on: ubuntu-latest
+    services:
+      languagetool:
+        image: erikvl87/languagetool
+        ports: ["8010:8010"]
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/checkout@v4
+        with: { repository: grimley517/pr-standards, path: .pr-standards }
+      - run: for i in $(seq 30); do curl -sf localhost:8010/v2/languages >/dev/null && break; sleep 2; done
+      - run: python3 .pr-standards/scripts/gate.py content "${{ github.event.pull_request.base.sha }}"
+
+  gate:
+    if: always()
+    needs: [classify, onboarding, hexagonal, coverage, owasp, observability, content]
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo '${{ toJSON(needs) }}' | python3 -c "import json,sys; bad=[k for k,v in json.load(sys.stdin).items() if v['result'] not in ('success','skipped')]; print('failed:', bad or 'none'); sys.exit(bool(bad))"
