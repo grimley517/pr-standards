@@ -111,5 +111,10 @@ jobs:
     needs: [classify, onboarding, hexagonal, coverage, owasp, observability, content]
     runs-on: ubuntu-latest
     steps:
-      - run: |
-          echo '${{ toJSON(needs) }}' | python3 -c "import json,sys; bad=[k for k,v in json.load(sys.stdin).items() if v['result'] not in ('success','skipped')]; print('failed:', bad or 'none'); sys.exit(bool(bad))"
+      - uses: actions/checkout@v4
+        with:
+          repository: grimley517/pr-standards
+          path: .pr-standards
+      - env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: python3 .pr-standards/scripts/gate.py summary
