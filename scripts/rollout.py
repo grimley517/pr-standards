@@ -7,7 +7,7 @@ Per repo: one commit adding only the caller workflow (repo type detected once an
 `type:` input; edit it to override) and .github/copilot-instructions.md, then upserts the "pr-standards" ruleset:
 PR required, "pr-standards / gate" check required, automatic Copilot review.
 """
-import base64, json, subprocess, sys
+import base64, json, subprocess, sys, time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -21,7 +21,11 @@ MARK = "## Repo notes"
 
 def gh(*args, body=None, ok404=False):
     cmd = ["gh", "api", *args] + (["--input", "-"] if body is not None else [])
-    r = subprocess.run(cmd, input=json.dumps(body) if body is not None else None, capture_output=True, text=True)
+    for attempt in range(4):  # retry transient/secondary-rate-limit failures
+        r = subprocess.run(cmd, input=json.dumps(body) if body is not None else None, capture_output=True, text=True)
+        if not r.returncode or "404" in r.stdout + r.stderr or "422" in r.stdout + r.stderr:
+            break
+        time.sleep(5 * (attempt + 1))
     if r.returncode:
         if ok404 and "404" in (r.stdout + r.stderr):
             return None
@@ -34,7 +38,7 @@ def repos(owners):
     for o in owners:
         url = "user/repos?affiliation=owner&per_page=100" if o == me else f"orgs/{o}/repos?per_page=100"
         for r in json.loads(subprocess.run(["gh", "api", "--paginate", url, "--jq", "[.[]]"], capture_output=True, text=True, check=True).stdout.replace("]\n[", ",")):
-            if r["owner"]["login"] == o and not r["archived"] and not r["fork"]:
+            if r["owner"]["login"].lower() == o.lower() and not r["archived"] and not r["fork"]:
                 yield r
 
 

@@ -11,7 +11,7 @@ import json, os, re, subprocess, sys, urllib.parse, urllib.request
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-SRC_EXT = {".py", ".js", ".jsx", ".ts", ".tsx", ".go", ".cs", ".java", ".kt", ".rb", ".ps1", ".psm1"}
+SRC_EXT = {".py", ".js", ".jsx", ".ts", ".tsx", ".go", ".cs", ".java", ".kt", ".rb", ".ps1", ".psm1", ".gs", ".ipynb", ".m", ".c", ".cpp", ".h", ".swift", ".rs", ".php", ".scala"}
 CONTENT_EXT = {".md", ".markdown", ".html", ".htm", ".txt"}
 SKIP_DIRS = {".git", "node_modules", "vendor", "dist", "build", "bin", "obj", ".venv", "venv", "__pycache__", "_site", ".next"}
 TEST_RE = re.compile(r"(^|/)(tests?|__tests__|spec|testing)(/|$)|(_test\.go|\.test\.[jt]sx?|\.spec\.[jt]sx?|Tests?\.cs|(^|/)test_[^/]+\.py|_test\.py)$", re.I)
@@ -76,7 +76,7 @@ def repo_type(c, fs=None):
     fs = files() if fs is None else fs
     src = source(fs)
     if any(DEPLOY_MARKERS.search(f) for f in fs) or any(Path(f).name.startswith("deploy") for f in fs if f.startswith(".github/workflows/")):
-        return "deployable" if src else "pages"
+        return "deployable" if src or any(f.endswith(".tf") for f in fs) else "pages"
     if len(src) == 0 or ("_config.yml" in fs and len(src) < 5):
         return "pages"
     return "code"
