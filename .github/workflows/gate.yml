@@ -24,8 +24,8 @@ jobs:
     outputs:
       type: ${{ steps.t.outputs.type }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
         with:
           repository: grimley517/pr-standards
           path: .pr-standards
@@ -36,8 +36,8 @@ jobs:
   onboarding:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
         with:
           repository: grimley517/pr-standards
           path: .pr-standards
@@ -48,10 +48,10 @@ jobs:
     if: needs.classify.outputs.type != 'pages'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: grimley517/pr-standards
           path: .pr-standards
@@ -62,8 +62,8 @@ jobs:
     if: needs.classify.outputs.type != 'pages'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
         with:
           repository: grimley517/pr-standards
           path: .pr-standards
@@ -75,10 +75,10 @@ jobs:
     runs-on: ubuntu-latest
     container: semgrep/semgrep
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: grimley517/pr-standards
           path: .pr-standards
@@ -92,8 +92,8 @@ jobs:
     if: needs.classify.outputs.type == 'deployable'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
         with:
           repository: grimley517/pr-standards
           path: .pr-standards
@@ -108,10 +108,10 @@ jobs:
         image: erikvl87/languagetool
         ports: ["8010:8010"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: grimley517/pr-standards
           path: .pr-standards
@@ -123,7 +123,7 @@ jobs:
     needs: [classify, onboarding, hexagonal, coverage, owasp, observability, content]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: grimley517/pr-standards
           path: .pr-standards
