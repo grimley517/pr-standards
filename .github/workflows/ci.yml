@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [ main ]
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Scripts and workflows
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.14'
+      - name: Compile scripts
+        run: python -m compileall -q scripts
+      - name: Check gate and CI workflows parse as YAML
+        run: |
+          pip install pyyaml
+          python - <<'PY'
+          import glob, yaml
+          for path in glob.glob('.github/workflows/*.yml') + glob.glob('templates/*.yml'):
+              yaml.safe_load(open(path))
+              print('ok', path)
+          PY
