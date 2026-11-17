@@ -1,4 +1,6 @@
 # Reusable PR gate. Callers: see templates/pr-standards.yml. Required check name: "pr-standards / gate".
+# Cost note: every job bills a 1-minute minimum, so cheap checks share one job (`checks`).
+# Dependabot PRs are skipped entirely (a skipped gate counts as passing).
 name: pr-standards
 on:
   workflow_call:
@@ -19,34 +21,11 @@ permissions:
   contents: read
 
 jobs:
-  classify:
+  checks:
+    if: github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     outputs:
       type: ${{ steps.t.outputs.type }}
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/checkout@v7
-        with:
-          repository: grimley517/pr-standards
-          path: .pr-standards
-      - id: t
-        env: { TYPE: "${{ inputs.type }}" }
-        run: echo "type=${TYPE:-$(python3 .pr-standards/scripts/gate.py type)}" >> "$GITHUB_OUTPUT"
-
-  onboarding:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/checkout@v7
-        with:
-          repository: grimley517/pr-standards
-          path: .pr-standards
-      - run: python3 .pr-standards/scripts/gate.py onboarding
-
-  hexagonal:
-    needs: classify
-    if: needs.classify.outputs.type != 'pages'
-    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
         with:
@@ -55,23 +34,21 @@ jobs:
         with:
           repository: grimley517/pr-standards
           path: .pr-standards
-      - run: python3 .pr-standards/scripts/gate.py hexagonal "${{ github.event.pull_request.base.sha }}"
-
-  coverage:
-    needs: classify
-    if: needs.classify.outputs.type != 'pages'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/checkout@v7
-        with:
-          repository: grimley517/pr-standards
-          path: .pr-standards
-      - run: python3 .pr-standards/scripts/gate.py coverage
+      - id: t
+        env: { TYPE: "${{ inputs.type }}" }
+        run: echo "type=${TYPE:-$(python3 .pr-standards/scripts/gate.py type)}" >> "$GITHUB_OUTPUT"
+      - if: ${{ !cancelled() }}
+        run: python3 .pr-standards/scripts/gate.py onboarding
+      - if: ${{ !cancelled() && steps.t.outputs.type != 'pages' }}
+        run: python3 .pr-standards/scripts/gate.py hexagonal "${{ github.event.pull_request.base.sha }}"
+      - if: ${{ !cancelled() && steps.t.outputs.type != 'pages' }}
+        run: python3 .pr-standards/scripts/gate.py coverage
+      - if: ${{ !cancelled() && steps.t.outputs.type == 'deployable' }}
+        run: python3 .pr-standards/scripts/gate.py observability
 
   owasp:
-    needs: classify
-    if: needs.classify.outputs.type != 'pages'
+    needs: checks
+    if: needs.checks.outputs.type != 'pages'
     runs-on: ubuntu-latest
     container: semgrep/semgrep
     steps:
@@ -87,21 +64,9 @@ jobs:
       - run: semgrep scan --config p/owasp-top-ten --config p/secrets --metrics=off --json -o semgrep.json --exclude .pr-standards --baseline-commit "${{ github.event.pull_request.base.sha }}"
       - run: python3 .pr-standards/scripts/gate.py semgrep
 
-  observability:
-    needs: classify
-    if: needs.classify.outputs.type == 'deployable'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/checkout@v7
-        with:
-          repository: grimley517/pr-standards
-          path: .pr-standards
-      - run: python3 .pr-standards/scripts/gate.py observability
-
   content:
-    needs: classify
-    if: needs.classify.outputs.type == 'pages'
+    needs: checks
+    if: needs.checks.outputs.type == 'pages'
     runs-on: ubuntu-latest
     services:
       languagetool:
@@ -119,8 +84,8 @@ jobs:
       - run: python3 .pr-standards/scripts/gate.py content "${{ github.event.pull_request.base.sha }}"
 
   gate:
-    if: always()
-    needs: [classify, onboarding, hexagonal, coverage, owasp, observability, content]
+    if: always() && github.actor != 'dependabot[bot]'
+    needs: [checks, owasp, content]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
