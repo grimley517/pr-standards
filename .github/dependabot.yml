@@ -3,8 +3,11 @@ updates:
   - package-ecosystem: uv
     directory: /
     schedule:
-      interval: weekly
-      day: monday
+      interval: cron
+      cronjob: "0 9 27 * *"  # 27th: spend the month's remaining Actions budget, not the next
+    groups:
+      all:
+        patterns: ["*"]
     assignees:
       - grimley517
     cooldown:
@@ -12,8 +15,11 @@ updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: weekly
-      day: tuesday
+      interval: cron
+      cronjob: "0 9 27 * *"  # 27th: spend the month's remaining Actions budget, not the next
+    groups:
+      all:
+        patterns: ["*"]
     assignees:
       - grimley517
     cooldown:
